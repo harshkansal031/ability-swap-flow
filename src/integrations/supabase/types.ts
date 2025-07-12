@@ -14,7 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      availability: {
+        Row: {
+          created_at: string
+          days: string[]
+          id: string
+          time_slots: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          days: string[]
+          id?: string
+          time_slots: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          days?: string[]
+          id?: string
+          time_slots?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      feedback: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          swap_request_id: string
+          would_swap_again: boolean
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          swap_request_id: string
+          would_swap_again?: boolean
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          reviewee_id?: string
+          reviewer_id?: string
+          swap_request_id?: string
+          would_swap_again?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_swap_request_id_fkey"
+            columns: ["swap_request_id"]
+            isOneToOne: false
+            referencedRelation: "swap_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          bio: string | null
+          created_at: string
+          full_name: string
+          id: string
+          is_public: boolean
+          location: string | null
+          profile_photo: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          full_name: string
+          id?: string
+          is_public?: boolean
+          location?: string | null
+          profile_photo?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_public?: boolean
+          location?: string | null
+          profile_photo?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      skills: {
+        Row: {
+          created_at: string
+          description: string | null
+          experience_level: string
+          id: string
+          is_priority: boolean | null
+          skill_name: string
+          skill_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          experience_level: string
+          id?: string
+          is_priority?: boolean | null
+          skill_name: string
+          skill_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          experience_level?: string
+          id?: string
+          is_priority?: boolean | null
+          skill_name?: string
+          skill_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      swap_requests: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          offered_skill_id: string
+          requested_user_id: string
+          requester_id: string
+          status: string
+          updated_at: string
+          wanted_skill_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          offered_skill_id: string
+          requested_user_id: string
+          requester_id: string
+          status?: string
+          updated_at?: string
+          wanted_skill_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          offered_skill_id?: string
+          requested_user_id?: string
+          requester_id?: string
+          status?: string
+          updated_at?: string
+          wanted_skill_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "swap_requests_offered_skill_id_fkey"
+            columns: ["offered_skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_requests_wanted_skill_id_fkey"
+            columns: ["wanted_skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

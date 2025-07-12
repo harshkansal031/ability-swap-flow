@@ -1,8 +1,22 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, ArrowRight } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 export const HeroSection = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      navigate(`/browse?search=${encodeURIComponent(searchTerm.trim())}`);
+    }
+  };
+
   return (
     <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-subtle">
       <div className="max-w-7xl mx-auto text-center">
@@ -26,28 +40,34 @@ export const HeroSection = () => {
 
         {/* Search Bar */}
         <div className="max-w-2xl mx-auto mb-12">
-          <div className="relative">
+          <form onSubmit={handleSearch} className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
             <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search for skills like 'Python', 'Guitar', 'Spanish'..."
               className="pl-12 pr-32 h-14 text-lg border-border/50 bg-background/50 backdrop-blur-sm shadow-card"
             />
-            <Button variant="gradient" size="lg" className="absolute right-2 top-2">
+            <Button type="submit" variant="gradient" size="lg" className="absolute right-2 top-2">
               Search Skills
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
-          </div>
+          </form>
         </div>
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button variant="hero" size="xl">
-            Join SkillSwap
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
-          <Button variant="outline" size="xl">
-            Browse Skills
-          </Button>
+          <Link to={user ? "/profile" : "/auth"}>
+            <Button variant="hero" size="xl">
+              {user ? "My Profile" : "Join SkillSwap"}
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          </Link>
+          <Link to="/browse">
+            <Button variant="outline" size="xl">
+              Browse Skills
+            </Button>
+          </Link>
         </div>
       </div>
     </section>
