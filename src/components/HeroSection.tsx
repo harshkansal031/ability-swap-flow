@@ -12,8 +12,14 @@ export const HeroSection = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Search submitted with term:', searchTerm);
     if (searchTerm.trim()) {
-      navigate(`/browse?search=${encodeURIComponent(searchTerm.trim())}`);
+      const searchUrl = `/browse?search=${encodeURIComponent(searchTerm.trim())}`;
+      console.log('Navigating to:', searchUrl);
+      navigate(searchUrl);
+    } else {
+      console.log('No search term, navigating to browse');
+      navigate('/browse');
     }
   };
 

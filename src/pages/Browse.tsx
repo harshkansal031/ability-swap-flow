@@ -3,15 +3,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Search, MapPin, User, MessageCircle } from 'lucide-react';
+import { Search, MapPin, User, MessageCircle, LogIn, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 interface Profile {
   id: string;
@@ -36,14 +37,23 @@ interface UserWithSkills extends Profile {
 }
 
 export default function Browse() {
+  console.log('Browse component rendering...');
+  
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  console.log('Current user:', user);
+  console.log('Search params:', searchParams.toString());
+  
   const [users, setUsers] = useState<UserWithSkills[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserWithSkills[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
-  const [experienceFilter, setExperienceFilter] = useState('');
+  const [experienceFilter, setExperienceFilter] = useState('all');
   
   // Swap request form
   const [selectedUser, setSelectedUser] = useState<UserWithSkills | null>(null);
@@ -53,24 +63,46 @@ export default function Browse() {
   const [showRequestDialog, setShowRequestDialog] = useState(false);
   const [userOfferedSkills, setUserOfferedSkills] = useState<Skill[]>([]);
 
+  // Read search parameter from URL
   useEffect(() => {
-    fetchUsers();
-    fetchCurrentUserSkills();
-  }, []);
+    const searchFromUrl = searchParams.get('search');
+    console.log('Search parameter from URL:', searchFromUrl);
+    if (searchFromUrl) {
+      setSearchTerm(searchFromUrl);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
+    console.log('Fetching users...');
+    fetchUsers();
+    if (user) {
+      console.log('User authenticated, fetching user skills...');
+      fetchCurrentUserSkills();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    console.log('Filtering users with search term:', searchTerm);
     filterUsers();
   }, [users, searchTerm, locationFilter, experienceFilter]);
 
   const fetchUsers = async () => {
     try {
+      setError(null);
+      console.log('Starting to fetch users from Supabase...');
+      
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .eq('is_public', true)
-        .neq('user_id', user?.id);
+        .neq('user_id', user?.id || '');
 
-      if (profilesError) throw profilesError;
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
+      }
+
+      console.log('Profiles fetched:', profiles?.length || 0);
 
       const usersWithSkills = await Promise.all(
         (profiles || []).map(async (profile) => {
@@ -79,7 +111,10 @@ export default function Browse() {
             .select('*')
             .eq('user_id', profile.user_id);
 
-          if (skillsError) throw skillsError;
+          if (skillsError) {
+            console.error('Error fetching skills for user:', profile.user_id, skillsError);
+            throw skillsError;
+          }
 
           return {
             ...profile,
@@ -88,9 +123,11 @@ export default function Browse() {
         })
       );
 
+      console.log('Users with skills processed:', usersWithSkills.length);
       setUsers(usersWithSkills);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError('Failed to load users. Please try again.');
       toast({
         title: "Error",
         description: "Failed to load users. Please try again.",
@@ -136,7 +173,7 @@ export default function Browse() {
       );
     }
 
-    if (experienceFilter) {
+    if (experienceFilter && experienceFilter !== 'all') {
       filtered = filtered.filter(user =>
         user.skills.some(skill => skill.experience_level === experienceFilter)
       );
@@ -146,6 +183,16 @@ export default function Browse() {
   };
 
   const handleRequestSwap = (user: UserWithSkills) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to request skill swaps.",
+        variant: "destructive",
+      });
+      navigate('/auth');
+      return;
+    }
+    
     setSelectedUser(user);
     setShowRequestDialog(true);
     setSelectedOfferedSkill('');
@@ -194,7 +241,34 @@ export default function Browse() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-background flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading users...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background pt-16">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold mb-4">Something went wrong</h2>
+            <p className="text-muted-foreground mb-6">{error}</p>
+            <Button onClick={() => {
+              setError(null);
+              setLoading(true);
+              fetchUsers();
+            }}>
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -229,7 +303,7 @@ export default function Browse() {
                     <SelectValue placeholder="Filter by experience level" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All levels</SelectItem>
+                    <SelectItem value="all">All levels</SelectItem>
                     <SelectItem value="Beginner">Beginner</SelectItem>
                     <SelectItem value="Intermediate">Intermediate</SelectItem>
                     <SelectItem value="Expert">Expert</SelectItem>
@@ -240,7 +314,7 @@ export default function Browse() {
                   onClick={() => {
                     setSearchTerm('');
                     setLocationFilter('');
-                    setExperienceFilter('');
+                    setExperienceFilter('all');
                   }}
                 >
                   Clear Filters
@@ -251,147 +325,204 @@ export default function Browse() {
         </Card>
 
         {/* Results */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredUsers.map((userData) => (
-            <Card key={userData.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <Avatar>
-                    <AvatarImage src={userData.profile_photo || ''} />
-                    <AvatarFallback>
-                      <User className="w-4 h-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle className="text-lg">{userData.full_name}</CardTitle>
-                    {userData.location && (
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <MapPin className="w-3 h-3 mr-1" />
-                        {userData.location}
-                      </div>
-                    )}
+            <Card key={userData.id} className="border-border/50 shadow-card hover:shadow-elevation transition-all duration-300 hover:-translate-y-1 bg-background">
+              <CardHeader className="text-center pb-4">
+                <Avatar className="w-20 h-20 mx-auto mb-4">
+                  <AvatarImage src={userData.profile_photo || ''} alt={userData.full_name} />
+                  <AvatarFallback className="bg-gradient-primary text-white text-lg font-semibold">
+                    {userData.full_name.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <h3 className="text-xl font-semibold text-foreground">{userData.full_name}</h3>
+                {userData.location && (
+                  <div className="flex items-center justify-center text-muted-foreground text-sm">
+                    <MapPin className="w-4 h-4 mr-1" />
+                    {userData.location}
                   </div>
-                </div>
+                )}
               </CardHeader>
+
               <CardContent className="space-y-4">
                 {userData.bio && (
-                  <p className="text-sm text-muted-foreground">{userData.bio}</p>
+                  <p className="text-sm text-muted-foreground text-center">{userData.bio}</p>
                 )}
                 
+                {/* Skills Offered */}
                 <div>
-                  <h4 className="font-medium mb-2">Skills Offered</h4>
-                  <div className="flex flex-wrap gap-1">
+                  <h4 className="text-sm font-medium text-foreground mb-2">Skills Offered</h4>
+                  <div className="flex flex-wrap gap-2">
                     {userData.skills
                       .filter(skill => skill.skill_type === 'offering')
                       .map(skill => (
-                        <Badge key={skill.id} variant="secondary" className="text-xs">
+                        <Badge key={skill.id} variant="secondary" className="bg-accent/50 text-accent-foreground">
                           {skill.skill_name} ({skill.experience_level})
                         </Badge>
                       ))}
                   </div>
                 </div>
 
+                {/* Skills Wanted */}
                 <div>
-                  <h4 className="font-medium mb-2">Skills Wanted</h4>
-                  <div className="flex flex-wrap gap-1">
+                  <h4 className="text-sm font-medium text-foreground mb-2">Skills Wanted</h4>
+                  <div className="flex flex-wrap gap-2">
                     {userData.skills
                       .filter(skill => skill.skill_type === 'wanted')
                       .map(skill => (
-                        <Badge key={skill.id} variant="outline" className="text-xs">
+                        <Badge key={skill.id} variant="outline" className="border-primary/30 text-primary">
                           {skill.skill_name}
                         </Badge>
                       ))}
                   </div>
                 </div>
 
-                <Button
+                {/* Rating and Level */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                    <span className="ml-1 text-sm font-medium">4.8/5</span>
+                  </div>
+                  <Badge className="bg-gradient-primary text-white">
+                    {userData.skills.find(skill => skill.skill_type === 'offering')?.experience_level || 'Beginner'}
+                  </Badge>
+                </div>
+              </CardContent>
+
+              <CardFooter>
+                <Button 
+                  variant="gradient" 
                   className="w-full"
                   onClick={() => handleRequestSwap(userData)}
                   disabled={!user}
                 >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Request Swap
+                  {user ? (
+                    <>
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Request Swap
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Login to Request
+                    </>
+                  )}
                 </Button>
-              </CardContent>
+              </CardFooter>
             </Card>
           ))}
         </div>
 
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">No users found matching your criteria.</p>
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No users found</h3>
+              <p className="text-muted-foreground mb-4">
+                {searchTerm || locationFilter || experienceFilter !== 'all'
+                  ? "No users match your current filters. Try adjusting your search criteria."
+                  : "No users are currently available. Check back later or be the first to join!"
+                }
+              </p>
+              {!user && (
+                <div className="mt-4">
+                  <p className="text-sm text-muted-foreground mb-2">Want to connect with skill swappers?</p>
+                  <Button onClick={() => navigate('/auth')}>
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Join SkillSwap
+                  </Button>
+                </div>
+              )}
+              {(searchTerm || locationFilter || experienceFilter !== 'all') && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setSearchTerm('');
+                    setLocationFilter('');
+                    setExperienceFilter('all');
+                  }}
+                  className="mt-2"
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Swap Request Dialog */}
-        <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Request Skill Swap</DialogTitle>
-              <DialogDescription>
-                Send a swap request to {selectedUser?.full_name}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Your Skill to Offer</Label>
-                <Select value={selectedOfferedSkill} onValueChange={setSelectedOfferedSkill}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a skill you offer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {userOfferedSkills.map(skill => (
-                      <SelectItem key={skill.id} value={skill.id}>
-                        {skill.skill_name} ({skill.experience_level})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Skill You Want</Label>
-                <Select value={selectedWantedSkill} onValueChange={setSelectedWantedSkill}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select skill you want to learn" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedUser?.skills
-                      .filter(skill => skill.skill_type === 'offering')
-                      .map(skill => (
+        {/* Swap Request Dialog - Only show if user is authenticated */}
+        {user && (
+          <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Request Skill Swap</DialogTitle>
+                <DialogDescription>
+                  Send a swap request to {selectedUser?.full_name}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Your Skill to Offer</Label>
+                  <Select value={selectedOfferedSkill} onValueChange={setSelectedOfferedSkill}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a skill you offer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {userOfferedSkills.map(skill => (
                         <SelectItem key={skill.id} value={skill.id}>
                           {skill.skill_name} ({skill.experience_level})
                         </SelectItem>
                       ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Skill You Want</Label>
+                  <Select value={selectedWantedSkill} onValueChange={setSelectedWantedSkill}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select skill you want to learn" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedUser?.skills
+                        .filter(skill => skill.skill_type === 'offering')
+                        .map(skill => (
+                          <SelectItem key={skill.id} value={skill.id}>
+                            {skill.skill_name} ({skill.experience_level})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Message (Optional)</Label>
-                <Textarea
-                  value={requestMessage}
-                  onChange={(e) => setRequestMessage(e.target.value)}
-                  placeholder="Introduce yourself and explain why you'd like to swap skills..."
-                  rows={3}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label>Message (Optional)</Label>
+                  <Textarea
+                    value={requestMessage}
+                    onChange={(e) => setRequestMessage(e.target.value)}
+                    placeholder="Introduce yourself and explain why you'd like to swap skills..."
+                    rows={3}
+                  />
+                </div>
 
-              <div className="flex gap-2">
-                <Button onClick={submitSwapRequest} className="flex-1">
-                  Send Request
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowRequestDialog(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={submitSwapRequest} className="flex-1">
+                    Send Request
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowRequestDialog(false)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </div>
   );

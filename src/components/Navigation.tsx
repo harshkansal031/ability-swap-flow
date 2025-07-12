@@ -37,16 +37,16 @@ export const Navigation = () => {
             >
               Home
             </Link>
+            <Link 
+              to="/browse" 
+              className={`transition-colors font-medium ${
+                isActive('/browse') ? 'text-primary' : 'text-muted-foreground hover:text-primary'
+              }`}
+            >
+              Browse
+            </Link>
             {user && (
               <>
-                <Link 
-                  to="/browse" 
-                  className={`transition-colors font-medium ${
-                    isActive('/browse') ? 'text-primary' : 'text-muted-foreground hover:text-primary'
-                  }`}
-                >
-                  Browse
-                </Link>
                 <Link 
                   to="/profile" 
                   className={`transition-colors font-medium ${
