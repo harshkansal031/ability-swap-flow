@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Browse from "./pages/Browse";
 import Requests from "./pages/Requests";
 import NotFound from "./pages/NotFound";
+import { Navigation } from "@/components/Navigation";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <Navigation />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
