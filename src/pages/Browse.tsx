@@ -104,24 +104,31 @@ export default function Browse() {
 
       console.log('Profiles fetched:', profiles?.length || 0);
 
-      const usersWithSkills = await Promise.all(
-        (profiles || []).map(async (profile) => {
-          const { data: skills, error: skillsError } = await supabase
-            .from('skills')
-            .select('*')
-            .eq('user_id', profile.user_id);
+      // Fetch skills for all users
+      const { data: allSkills, error: skillsError } = await supabase
+        .from('skills')
+        .select('*')
+        .in('user_id', profiles?.map(p => p.user_id) || []);
 
-          if (skillsError) {
-            console.error('Error fetching skills for user:', profile.user_id, skillsError);
-            throw skillsError;
-          }
+      if (skillsError) {
+        console.error('Error fetching skills:', skillsError);
+        throw skillsError;
+      }
 
-          return {
-            ...profile,
-            skills: skills || [],
-          };
-        })
-      );
+      // Group skills by user_id
+      const skillsByUser = (allSkills || []).reduce((acc, skill) => {
+        if (!acc[skill.user_id]) {
+          acc[skill.user_id] = [];
+        }
+        acc[skill.user_id].push(skill);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Convert profiles to UserWithSkills format
+      const usersWithSkills = (profiles || []).map(profile => ({
+        ...profile,
+        skills: skillsByUser[profile.user_id] || []
+      }));
 
       console.log('Users with skills processed:', usersWithSkills.length);
       setUsers(usersWithSkills);
@@ -357,9 +364,12 @@ export default function Browse() {
                       .filter(skill => skill.skill_type === 'offering')
                       .map(skill => (
                         <Badge key={skill.id} variant="secondary" className="bg-accent/50 text-accent-foreground">
-                          {skill.skill_name} ({skill.experience_level})
+                          {skill.skill_name}
                         </Badge>
                       ))}
+                    {userData.skills.filter(skill => skill.skill_type === 'offering').length === 0 && (
+                      <p className="text-sm text-muted-foreground">No skills offered yet</p>
+                    )}
                   </div>
                 </div>
 
@@ -374,6 +384,9 @@ export default function Browse() {
                           {skill.skill_name}
                         </Badge>
                       ))}
+                    {userData.skills.filter(skill => skill.skill_type === 'wanted').length === 0 && (
+                      <p className="text-sm text-muted-foreground">No skills wanted yet</p>
+                    )}
                   </div>
                 </div>
 
@@ -423,7 +436,7 @@ export default function Browse() {
               <p className="text-muted-foreground mb-4">
                 {searchTerm || locationFilter || experienceFilter !== 'all'
                   ? "No users match your current filters. Try adjusting your search criteria."
-                  : "No users are currently available. Check back later or be the first to join!"
+                  : "No users are currently available. Users need to add offering skills to their profiles to appear here."
                 }
               </p>
               {!user && (

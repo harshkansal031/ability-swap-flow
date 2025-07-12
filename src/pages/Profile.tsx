@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, X, Clock, MapPin, User } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Plus, X, Clock, MapPin, User, Upload, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Profile {
@@ -18,6 +19,7 @@ interface Profile {
   location: string;
   bio: string;
   is_public: boolean;
+  profile_photo?: string;
 }
 
 interface Skill {
@@ -43,12 +45,14 @@ export default function Profile() {
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Form states
   const [fullName, setFullName] = useState('');
   const [location, setLocation] = useState('');
   const [bio, setBio] = useState('');
   const [isPublic, setIsPublic] = useState(true);
+  const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
 
@@ -62,6 +66,44 @@ export default function Profile() {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const timeSlots = ['Morning', 'Afternoon', 'Evening'];
   const experienceLevels = ['Beginner', 'Intermediate', 'Expert'];
+
+  // Test function to check database access
+  const testDatabaseAccess = async () => {
+    try {
+      console.log('Testing database access...');
+      
+      // Test reading profiles
+      const { data: readData, error: readError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user?.id)
+        .limit(1);
+      
+      console.log('Read test result:', { data: readData, error: readError });
+      
+      // Test writing to profiles (with minimal data)
+      const testData = {
+        user_id: user?.id,
+        full_name: 'Test User',
+      };
+      
+      const { data: writeData, error: writeError } = await supabase
+        .from('profiles')
+        .upsert(testData, { onConflict: 'user_id' });
+      
+      console.log('Write test result:', { data: writeData, error: writeError });
+      
+    } catch (error) {
+      console.error('Database access test failed:', error);
+    }
+  };
+
+  // Call the test function when component mounts
+  useEffect(() => {
+    if (user) {
+      testDatabaseAccess();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -89,6 +131,7 @@ export default function Profile() {
         setLocation(data.location || '');
         setBio(data.bio || '');
         setIsPublic(data.is_public);
+        setProfilePhoto(data.profile_photo || '');
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -132,20 +175,90 @@ export default function Profile() {
     setLoading(false);
   };
 
-  const handleSaveProfile = async () => {
-    // Validate that user has at least one skill
-    if (skills.length === 0) {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type and size
+    if (!file.type.startsWith('image/')) {
       toast({
-        title: "Skills Required",
-        description: "Please add at least one skill before saving your profile. You need to specify what you can offer or what you want to learn.",
+        title: "Invalid file type",
+        description: "Please select an image file.",
         variant: "destructive",
       });
       return;
     }
 
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('profile-photos')
+        .upload(fileName, file);
+
+      if (error) {
+        if (error.message.includes('bucket') || error.message.includes('not found')) {
+          toast({
+            title: "Storage not configured",
+            description: "Profile photo upload is not available yet. Please contact support.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(fileName);
+
+      setProfilePhoto(publicUrl);
+      
+      toast({
+        title: "Photo uploaded successfully!",
+        description: "Your profile photo has been updated.",
+      });
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload photo. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setUploadingPhoto(false);
+  };
+
+  const handleSaveProfile = async () => {
     // Validate that user has at least one offering skill
-    const offeringSkills = skills.filter(skill => skill.skill_type === 'offering');
-    if (offeringSkills.length === 0) {
+    const offeringSkillsFromSkills = skills
+      .filter(skill => skill.skill_type === 'offering')
+      .map(skill => skill.skill_name);
+
+    console.log('Offering skills from skills table:', offeringSkillsFromSkills);
+    console.log('Current user id:', user?.id);
+    console.log('Saving profile with:', {
+      user_id: user?.id,
+      full_name: fullName,
+      location,
+      bio,
+      is_public: isPublic,
+    });
+
+    if (offeringSkillsFromSkills.length === 0) {
       toast({
         title: "Offering Skills Required",
         description: "Please add at least one skill you can offer to others. This helps other users know what you can teach.",
@@ -164,17 +277,13 @@ export default function Profile() {
         is_public: isPublic,
       };
 
-      if (profile) {
-        const { error } = await supabase
-          .from('profiles')
-          .update(profileData)
-          .eq('user_id', user?.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('profiles')
-          .insert(profileData);
-        if (error) throw error;
+      // Use upsert to insert or update by user_id
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(profileData, { onConflict: ['user_id'] });
+      if (error) {
+        console.error('Error upserting profile:', error);
+        throw error;
       }
 
       // Save availability
@@ -184,26 +293,23 @@ export default function Profile() {
         time_slots: selectedTimeSlots,
       };
 
-      if (availability) {
-        const { error } = await supabase
-          .from('availability')
-          .update(availabilityData)
-          .eq('user_id', user?.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('availability')
-          .insert(availabilityData);
-        if (error) throw error;
+      // Use upsert for availability as well
+      const { error: availError } = await supabase
+        .from('availability')
+        .upsert(availabilityData, { onConflict: ['user_id'] });
+      if (availError) {
+        console.error('Error upserting availability:', availError);
+        throw availError;
       }
+
+      // Update local state instead of refetching
+      setProfile(prev => prev ? { ...prev, ...profileData } : null);
+      setAvailability(prev => prev ? { ...prev, ...availabilityData } : null);
 
       toast({
         title: "Profile updated successfully!",
         description: "Your profile information has been saved.",
       });
-
-      fetchProfile();
-      fetchAvailability();
     } catch (error) {
       console.error('Error saving profile:', error);
       toast({
@@ -393,6 +499,28 @@ export default function Profile() {
               />
               <Label htmlFor="public">Make profile public</Label>
             </div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="profilePhoto">Profile Photo</Label>
+              <Input
+                id="profilePhoto"
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                disabled={uploadingPhoto}
+              />
+              {uploadingPhoto && <span className="ml-2 text-sm text-muted-foreground">Uploading...</span>}
+            </div>
+            {profilePhoto && (
+              <div className="flex items-center space-x-2">
+                <Avatar>
+                  <AvatarImage src={profilePhoto} alt="Profile" />
+                  <AvatarFallback>
+                    {fullName ? fullName.charAt(0) : 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <p className="text-sm text-muted-foreground">Current profile photo</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -558,26 +686,17 @@ export default function Profile() {
         <Button
           onClick={handleSaveProfile}
           className="w-full"
-          disabled={saving || skills.length === 0}
+          disabled={saving || skills.filter(s => s.skill_type === 'offering').length === 0}
         >
           {saving ? 'Saving...' : 
-           skills.length === 0 ? 'Add Skills to Save Profile' : 
            skills.filter(s => s.skill_type === 'offering').length === 0 ? 'Add Offering Skills to Save Profile' : 
            'Save Profile'}
         </Button>
         
-        {skills.length === 0 && (
+        {skills.filter(s => s.skill_type === 'offering').length === 0 && (
           <div className="text-center p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground">
-              ⚠️ You need to add at least one skill before saving your profile.
-            </p>
-          </div>
-        )}
-        
-        {skills.length > 0 && skills.filter(s => s.skill_type === 'offering').length === 0 && (
-          <div className="text-center p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              ⚠️ You need to add at least one skill you can offer to others.
+              ⚠️ You need to add at least one skill you can offer to others before saving your profile.
             </p>
           </div>
         )}
