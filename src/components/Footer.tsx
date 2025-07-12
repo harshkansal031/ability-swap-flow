@@ -56,7 +56,7 @@ export const Footer = () => {
         {/* Bottom Section */}
         <div className="border-t border-border mt-12 pt-8 text-center">
           <p className="text-muted-foreground">
-            © 2024 SkillSwap. All rights reserved. Built with ❤️ for the learning community.
+            © 2025 SkillSwap. All rights reserved. Built for the learning community.
           </p>
         </div>
       </div>
