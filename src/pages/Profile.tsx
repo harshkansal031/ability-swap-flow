@@ -133,6 +133,27 @@ export default function Profile() {
   };
 
   const handleSaveProfile = async () => {
+    // Validate that user has at least one skill
+    if (skills.length === 0) {
+      toast({
+        title: "Skills Required",
+        description: "Please add at least one skill before saving your profile. You need to specify what you can offer or what you want to learn.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate that user has at least one offering skill
+    const offeringSkills = skills.filter(skill => skill.skill_type === 'offering');
+    if (offeringSkills.length === 0) {
+      toast({
+        title: "Offering Skills Required",
+        description: "Please add at least one skill you can offer to others. This helps other users know what you can teach.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const profileData = {
@@ -195,15 +216,56 @@ export default function Profile() {
   };
 
   const handleAddSkill = async () => {
-    if (!skillName || !skillLevel || !skillType) return;
+    // Validate required fields
+    if (!skillName.trim()) {
+      toast({
+        title: "Skill Name Required",
+        description: "Please enter a skill name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!skillType) {
+      toast({
+        title: "Skill Type Required",
+        description: "Please select whether this is a skill you offer or want to learn.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!skillLevel) {
+      toast({
+        title: "Experience Level Required",
+        description: "Please select your experience level for this skill.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if skill already exists
+    const existingSkill = skills.find(
+      skill => skill.skill_name.toLowerCase() === skillName.trim().toLowerCase() && 
+               skill.skill_type === skillType
+    );
+
+    if (existingSkill) {
+      toast({
+        title: "Skill Already Exists",
+        description: "You already have this skill in your profile.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const { error } = await supabase
         .from('skills')
         .insert({
           user_id: user?.id,
-          skill_name: skillName,
-          description: skillDescription,
+          skill_name: skillName.trim(),
+          description: skillDescription.trim(),
           experience_level: skillLevel,
           skill_type: skillType,
         });
@@ -496,10 +558,29 @@ export default function Profile() {
         <Button
           onClick={handleSaveProfile}
           className="w-full"
-          disabled={saving}
+          disabled={saving || skills.length === 0}
         >
-          {saving ? 'Saving...' : 'Save Profile'}
+          {saving ? 'Saving...' : 
+           skills.length === 0 ? 'Add Skills to Save Profile' : 
+           skills.filter(s => s.skill_type === 'offering').length === 0 ? 'Add Offering Skills to Save Profile' : 
+           'Save Profile'}
         </Button>
+        
+        {skills.length === 0 && (
+          <div className="text-center p-4 bg-muted/50 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              ⚠️ You need to add at least one skill before saving your profile.
+            </p>
+          </div>
+        )}
+        
+        {skills.length > 0 && skills.filter(s => s.skill_type === 'offering').length === 0 && (
+          <div className="text-center p-4 bg-muted/50 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              ⚠️ You need to add at least one skill you can offer to others.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
